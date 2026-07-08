@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cricket Tap Master</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background: #0a1f0e;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            height: 100%;
+            max-height: 800px;
+            background: #1a472a;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            border-radius: 24px;
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #2d7244;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 14px;
+            left: 0;
+            width: 100%;
+            padding: 0 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #fff;
+            font-size: 17px;
+            font-weight: bold;
+            text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
+            pointer-events: none;
+            z-index: 5;
+        }
+        .ui-layer > div {
+            background: rgba(0,0,0,0.35);
+            padding: 4px 12px;
+            border-radius: 30px;
+            backdrop-filter: blur(2px);
+        }
+        .score-box { color: #ffd700; }
+        .wicket-box { color: #ff6b6b; }
+        .best-box { color: #7bed9f; font-size: 15px; }
+
+        /* 覆盖层（开始/结束） */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            padding: 20px;
+            transition: opacity 0.3s;
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 {
+            font-size: 42px;
+            color: #ffd700;
+            margin-bottom: 6px;
+            text-shadow: 0 4px 20px rgba(255,215,0,0.3);
+            text-align: center;
+        }
+        .overlay .subhead {
+            font-size: 18px;
+            color: #ddd;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .overlay .desc {
+            font-size: 16px;
+            color: #bbb;
+            margin-bottom: 12px;
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.5;
+        }
+        .overlay .best-display {
+            font-size: 18px;
+            color: #7bed9f;
+            margin-bottom: 24px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px 20px;
+            border-radius: 40px;
+        }
+        .btn {
+            padding: 16px 48px;
+            font-size: 24px;
+            font-weight: bold;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+            letter-spacing: 1px;
+        }
+        .btn:active { transform: scale(0.94); box-shadow: 0 2px 10px rgba(255,71,87,0.3); }
+        .btn-secondary {
+            background: #2d9cdb;
+            box-shadow: 0 6px 20px rgba(45, 156, 219, 0.4);
+            margin-top: 12px;
+            font-size: 18px;
+            padding: 12px 32px;
+        }
+        .final-score {
+            font-size: 56px;
+            color: #ffd700;
+            font-weight: bold;
+            margin: 6px 0;
+        }
+        .final-label { font-size: 22px; color: #ccc; margin-top: 4px; }
+        .final-best {
+            font-size: 18px;
+            color: #7bed9f;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 480px) {
+            .overlay h1 { font-size: 32px; }
+            .btn { padding: 14px 32px; font-size: 20px; }
+            .ui-layer { font-size: 14px; padding: 0 10px; top: 10px; }
+            .ui-layer > div { padding: 2px 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 顶部计数 -->
+    <div class="ui-layer">
+        <div class="score-box">🏏 <span id="scoreLabel">RUNS</span>: <span id="score">0</span></div>
+        <div class="best-box">🏆 <span id="bestLabel">BEST</span>: <span id="bestDisplay">0</span></div>
+        <div class="wicket-box">⚡ <span id="wicketLabel">WICKET</span>: <span id="lives">3</span></div>
+    </div>
+
+    <!-- 开始界面 -->
+    <div id="start-screen" class="overlay">
+        <h1 id="startTitle">🏏 CRICKET MASTER</h1>
+        <div class="subhead" id="startSub">Tap to Bat!</div>
+        <div class="desc" id="startDesc">Ball rolls down – tap when it enters the GOLDEN ZONE to hit!</div>
+        <div class="best-display" id="startBest">🏆 Best: 0</div>
+        <button class="btn" id="startBtn">▶ PLAY NOW</button>
+    </div>
+
+    <!-- 结束界面 -->
+    <div id="gameover-screen" class="overlay hidden">
+        <h1 id="gameoverTitle">💥 GAME OVER</h1>
+        <div class="final-label" id="finalLabel">Your Final Score</div>
+        <div class="final-score" id="final-score">0</div>
+        <div style="margin-bottom: 4px; color: #aaa;" id="runsLabel">Runs</div>
+        <div class="final-best" id="finalBest">🏆 Best: 0</div>
+        <button class="btn" id="restartBtn" style="margin-top: 16px;">🔄 TRY AGAIN</button>
+    </div>
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+    (function() {
+        // ---------- 多语言翻译包 ----------
+        const LANG = {
+            en: {
+                title: '🏏 CRICKET MASTER',
+                sub: 'Tap to Bat!',
+                desc: 'Ball rolls down – tap when it enters the GOLDEN ZONE to hit!',
+                startBtn: '▶ PLAY NOW',
+                restartBtn: '🔄 TRY AGAIN',
+                gameoverTitle: '💥 GAME OVER',
+                finalLabel: 'Your Final Score',
+                runsLabel: 'Runs',
+                scoreLabel: 'RUNS',
+                wicketLabel: 'WICKET',
+                bestLabel: 'BEST',
+                bestPrefix: '🏆 Best:',
+                perfect: '🔥 PERFECT! SIX!',
+                good: '✅ GOOD! 4 RUNS',
+                missed: '❌ MISSED!',
+                bowled: '⚡ BOWLED!'
+            },
+            hi: {
+                title: '🏏 क्रिकेट मास्टर',
+                sub: 'बल्लेबाज़ी करें!',
+                desc: 'गेंद नीचे आती है – जब वह सुनहरे क्षेत्र में हो तब टैप करें!',
+                startBtn: '▶ खेलें',
+                restartBtn: '🔄 फिर से कोशिश करें',
+                gameoverTitle: '💥 खेल समाप्त',
+                finalLabel: 'आपका अंतिम स्कोर',
+                runsLabel: 'रन',
+                scoreLabel: 'रन',
+                wicketLabel: 'विकेट',
+                bestLabel: 'सर्वश्रेष्ठ',
+                bestPrefix: '🏆 सर्वश्रेष्ठ:',
+                perfect: '🔥 शानदार! छक्का!',
+                good: '✅ अच्छा! 4 रन',
+                missed: '❌ चूक गए!',
+                bowled: '⚡ बोल्ड!'
+            },
+            ur: {
+                title: '🏏 کرکٹ ماسٹر',
+                sub: 'بیٹنگ کریں!',
+                desc: 'گیند نیچے آتی ہے – جب وہ سنہری زون میں ہو تو ٹیپ کریں!',
+                startBtn: '▶ کھیلیں',
+                restartBtn: '🔄 دوبارہ کوشش کریں',
+                gameoverTitle: '💥 کھیل ختم',
+                finalLabel: 'آپ کا آخری سکور',
+                runsLabel: 'رنز',
+                scoreLabel: 'رنز',
+                wicketLabel: 'وکٹ',
+                bestLabel: 'بہترین',
+                bestPrefix: '🏆 بہترین:',
+                perfect: '🔥 شاندار! چھکا!',
+                good: '✅ اچھا! 4 رنز',
+                missed: '❌ چوک گئے!',
+                bowled: '⚡ بولڈ!'
+            },
+            bn: {
+                title: '🏏 ক্রিকেট মাস্টার',
+                sub: 'ব্যাট করুন!',
+                desc: 'বল নিচে আসে – যখন এটি সোনালী অঞ্চলে প্রবেশ করে তখন ট্যাপ করুন!',
+                startBtn: '▶ খেলুন',
+                restartBtn: '🔄 আবার চেষ্টা করুন',
+                gameoverTitle: '💥 খেলা শেষ',
+                finalLabel: 'আপনার চূড়ান্ত স্কোর',
+                runsLabel: 'রান',
+                scoreLabel: 'রান',
+                wicketLabel: 'উইকেট',
+                bestLabel: 'সেরা',
+                bestPrefix: '🏆 সেরা:',
+                perfect: '🔥 দুর্দান্ত! ছক্কা!',
+                good: '✅ ভালো! ৪ রান',
+                missed: '❌ মিস!',
+                bowled: '⚡ বোল্ড!'
+            }
+        };
+
+        const DEFAULT_LOCALE = 'en';
+        let currentLocale = DEFAULT_LOCALE;
+
+        // ---------- 获取用户locale ----------
+        function resolveLocale() {
+            const q = new URLSearchParams(location.search).get('locale');
+            if (q) return q;
+            if (window.__parrot && window.__parrot.locale) return window.__parrot.locale;
+            return DEFAULT_LOCALE;
+        }
+        function normalize(locale) {
+            if (!locale) return DEFAULT_LOCALE;
+            const lang = locale.split('-')[0].toLowerCase();
+            return LANG[lang] ? lang : DEFAULT_LOCALE;
+        }
+
+        function t(key, ...args) {
+            const dict = LANG[currentLocale] || LANG[DEFAULT_LOCALE];
+            const val = dict[key];
+            if (typeof val === 'function') return val(...args);
+            return val || key;
+        }
+
+        // ---------- DOM 元素 ----------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const finalScoreEl = document.getElementById('final-score');
+        const bestDisplay = document.getElementById('bestDisplay');
+        const startBest = document.getElementById('startBest');
+        const finalBest = document.getElementById('finalBest');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // 需要翻译的UI元素
+        const startTitle = document.getElementById('startTitle');
+        const startSub = document.getElementById('startSub');
+        const startDesc = document.getElementById('startDesc');
+        const gameoverTitle = document.getElementById('gameoverTitle');
+        const finalLabel = document.getElementById('finalLabel');
+        const runsLabel = document.getElementById('runsLabel');
+        const scoreLabel = document.getElementById('scoreLabel');
+        const wicketLabel = document.getElementById('wicketLabel');
+        const bestLabel = document.getElementById('bestLabel');
+
+        // ---------- 游戏状态 ----------
+        let score = 0;
+        let lives = 3;
+        let isPlaying = false;
+        let animationFrameId;
+        let highScore = parseInt(localStorage.getItem('cricketHighScore')) || 0;
+
+        // 游戏对象
+        let ball = { x: 0, y: 0, radius: 16, speed: 4, active: false };
+        const hitZone = { y: 0, height: 60 };
+        let batAngle = 0;
+        let isSwinging = false;
+        let feedbackText = '';
+        let feedbackTimer = 0;
+        let feedbackColor = '#fff';
+
+        // ---------- 自适应尺寸 ----------
+        function resize() {
+            const rect = canvas.parentNode.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            hitZone.y = canvas.height * 0.72;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ---------- 最高分更新 ----------
+        function updateHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('cricketHighScore', String(highScore));
+            }
+            // 更新所有显示最高分的地方
+            bestDisplay.textContent = highScore;
+            startBest.textContent = `${t('bestPrefix')} ${highScore}`;
+            finalBest.textContent = `${t('bestPrefix')} ${highScore}`;
+        }
+
+        // ---------- 游戏核心函数 ----------
+        function spawnBall() {
+            // 基础速度随分数增加，同时加入随机波动
+            let baseSpeed = 4 + Math.floor(score / 20); // 每20分增加1
+            if (baseSpeed > 10) baseSpeed = 10; // 上限10
+            // 随机偏移 -0.8 ~ +0.8
+            const offset = (Math.random() - 0.5) * 1.6;
+            let speed = baseSpeed + offset;
+            // 限制在2~12之间
+            if (speed < 2) speed = 2;
+            if (speed > 12) speed = 12;
+            ball.speed = speed;
+            ball.x = canvas.width / 2;
+            ball.y = -40;
+            ball.active = true;
+        }
+
+        function showFeedback(text, color) {
+            feedbackText = text;
+            feedbackColor = color;
+            feedbackTimer = 45;
+        }
+
+        function endGame() {
+            isPlaying = false;
+            updateHighScore(); // 更新最高分
+            finalScoreEl.textContent = score;
+            // 更新结束界面文字
+            gameoverTitle.textContent = t('gameoverTitle');
+            finalLabel.textContent = t('finalLabel');
+            runsLabel.textContent = t('runsLabel');
+            finalBest.textContent = `${t('bestPrefix')} ${highScore}`;
+            gameoverScreen.classList.remove('hidden');
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        }
+
+        function startGame() {
+            score = 0;
+            lives = 3;
+            isPlaying = true;
+            scoreEl.textContent = score;
+            livesEl.textContent = lives;
+            startScreen.classList.add('hidden');
+            gameoverScreen.classList.add('hidden');
+            feedbackText = '';
+            feedbackTimer = 0;
+            // 更新最高分显示（可能已在其他界面更新）
+            bestDisplay.textContent = highScore;
+            spawnBall();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            update();
+        }
+
+        // ---------- 点击事件（挥棒） ----------
+        function handleTap(e) {
+            if (!isPlaying || isSwinging) return;
+            if (e.target.closest('button')) return;
+
+            isSwinging = true;
+            batAngle = -40;
+
+            if (ball.active) {
+                const ballCenterY = ball.y;
+                const zoneTop = hitZone.y;
+                const zoneBottom = hitZone.y + hitZone.height;
+
+                if (ballCenterY >= zoneTop && ballCenterY <= zoneBottom) {
+                    const distanceToCenter = Math.abs(ballCenterY - (zoneTop + hitZone.height/2));
+                    if (distanceToCenter < 18) {
+                        showFeedback(t('perfect'), '#ffd700');
+                        score += 6;
+                    } else {
+                        showFeedback(t('good'), '#00ff88');
+                        score += 4;
+                    }
+                    ball.active = false;
+                } else {
+                    showFeedback(t('missed'), '#ff4757');
+                    lives--;
+                    ball.active = false;
+                }
+                scoreEl.textContent = score;
+                livesEl.textContent = lives;
+
+                if (lives <= 0) {
+                    endGame();
+                }
+            }
+        }
+
+        canvas.addEventListener('pointerdown', handleTap);
+
+        // ---------- 主渲染循环 ----------
+        function update() {
+            if (!isPlaying) return;
+
+            // 清空并绘制背景
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#1e562e');
+            grad.addColorStop(1, '#2d7244');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制 pitch
+            ctx.fillStyle = '#d4b88c';
+            ctx.shadowColor = 'rgba(0,0,0,0.2)';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(canvas.width/2 - 30, 0, 60, canvas.height);
+            ctx.shadowBlur = 0;
+
+            // 绘制击球区
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = 'rgba(255,215,0,0.5)';
+            ctx.fillRect(0, hitZone.y, canvas.width, hitZone.height);
+            ctx.strokeRect(0, hitZone.y, canvas.width, hitZone.height);
+            ctx.shadowBlur = 0;
+
+            // 绘制球
+            if (ball.active) {
+                ball.y += ball.speed;
+                if (ball.y > canvas.height + 30) {
+                    showFeedback(t('bowled'), '#ff6b6b');
+                    lives--;
+                    livesEl.textContent = lives;
+                    if (lives <= 0) endGame();
+                    else spawnBall();
+                }
+
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+                ctx.fillStyle = '#b22222';
+                ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius-2, -Math.PI/4, Math.PI/4);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            } else if (isPlaying && lives > 0) {
+                spawnBall();
+            }
+
+            // 绘制球棒
+            ctx.save();
+            const batX = canvas.width/2 - 40;
+            const batY = hitZone.y + hitZone.height/2;
+            ctx.translate(batX, batY);
+            if (isSwinging) {
+                batAngle += 18;
+                if (batAngle > 50) {
+                    isSwinging = false;
+                    batAngle = 0;
+                }
+            }
+            ctx.rotate(batAngle * Math.PI / 180);
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = '#d7a15c';
+            ctx.fillRect(0, -12, 72, 20);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-18, -8, 18, 12);
+            ctx.restore();
+            ctx.shadowBlur = 0;
+
+            // 反馈文字
+            if (feedbackTimer > 0) {
+                ctx.font = 'bold 34px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 12;
+                ctx.fillStyle = feedbackColor;
+                ctx.fillText(feedbackText, canvas.width/2, hitZone.y - 50);
+                ctx.shadowBlur = 0;
+                feedbackTimer--;
+            }
+
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        // ---------- 应用语言 ----------
+        function applyLocale(locale) {
+            currentLocale = normalize(locale);
+            startTitle.textContent = t('title');
+            startSub.textContent = t('sub');
+            startDesc.textContent = t('desc');
+            startBtn.textContent = t('startBtn');
+            restartBtn.textContent = t('restartBtn');
+            gameoverTitle.textContent = t('gameoverTitle');
+            finalLabel.textContent = t('finalLabel');
+            runsLabel.textContent = t('runsLabel');
+            scoreLabel.textContent = t('scoreLabel');
+            wicketLabel.textContent = t('wicketLabel');
+            bestLabel.textContent = t('bestLabel');
+            // 更新最高分显示（含前缀）
+            startBest.textContent = `${t('bestPrefix')} ${highScore}`;
+            finalBest.textContent = `${t('bestPrefix')} ${highScore}`;
+            // 顶部 best 只显示数字，标签已经单独
+            bestDisplay.textContent = highScore;
+        }
+
+        // ---------- 初始化 ----------
+        function init() {
+            const locale = resolveLocale();
+            applyLocale(locale);
+            // 设置初始最高分
+            updateHighScore(); // 确保显示
+            startScreen.classList.remove('hidden');
+            gameoverScreen.classList.add('hidden');
+            startBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', startGame);
+            // 绘制静态画面
+            resize();
+            ctx.fillStyle = '#2d7244';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏏 Tap to start', canvas.width/2, canvas.height/2);
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
